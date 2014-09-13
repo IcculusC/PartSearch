@@ -7,23 +7,20 @@ namespace PartSearch
 {
     static class I
     {
-        private static GameObject _gameObject;
+        private static GameObject gameObject;
 
         public static T AddI<T>(string name) where T : Component
         {
-            if (_gameObject == null)
+            if (gameObject == null)
             {
-                _gameObject = new GameObject(name, typeof(T));
-                GameObject.DontDestroyOnLoad(_gameObject);
+                gameObject = new GameObject(name, typeof(T));
+                GameObject.DontDestroyOnLoad(gameObject);
 
-                return _gameObject.GetComponent<T>();
+                return gameObject.GetComponent<T>();
             }
             else
             {
-                if (_gameObject.GetComponent<T>() != null)
-                    return _gameObject.GetComponent<T>();
-                else
-                    return _gameObject.AddComponent<T>();
+                return gameObject.GetComponent<T>() ?? gameObject.AddComponent<T>();
             }
         }
     }
@@ -36,6 +33,7 @@ namespace PartSearch
         }
     }
 
+    [KSPAddon(KSPAddon.Startup.EditorAny, false)]
     public class PSBehaviour : MonoBehaviour
     {
 
@@ -49,28 +47,26 @@ namespace PartSearch
          * EditorPartList.Instance.categorySelected determines which category the user currently has up
          */       
 
-        private List<AvailablePart> _holder = new List<AvailablePart>();
-        private Dictionary<AvailablePart, PartCategories> _master = null;
+        private Dictionary<AvailablePart, PartCategories> master = null;
 
-        private TextWithListener _text;
+        private TextWithListener text;
 
-        private GameScenes _scene;
+        private GameScenes scene;
 
-        private PartCategories _panel;
+        private PartCategories panel;
 
-        private bool _categorize;
+        private bool categorize = true;
 
         private static Texture2D back;
 
         public void Start()
         {
-            if (_text == null) // create a text box with listener, see below
+            if (text == null) // create a searchText box with listener, see below
             {
-                _text = new TextWithListener(1, "");
-                _text.TextChangedListener = Search; // set the boxes callback to the Search function below
-            }           
+                text = new TextWithListener(1, "") {textChangedListener = Search};
+            }
 
-            _scene = HighLogic.LoadedScene;
+            scene = HighLogic.LoadedScene;
 
             byte[] bit = Properties.Resources.eraser_small; // get button image from resources
 
@@ -80,46 +76,72 @@ namespace PartSearch
 
         public void Update()
         {
-            if (_master == null && PartLoader.LoadedPartsList != null && HighLogic.LoadedSceneIsEditor) // master part list not initialized
+            if (master == null && PartLoader.LoadedPartsList != null && HighLogic.LoadedSceneIsEditor) // master part list not initialized
             {
-                _master = new Dictionary<AvailablePart, PartCategories>(); // create master part list
-                PartLoader.LoadedPartsList.ForEach(x => _master.Add(x, x.category)); // populate master part list, the value is the category of the part
+                master = new Dictionary<AvailablePart, PartCategories>(); // create master part list
+                PartLoader.LoadedPartsList.ForEach(x => master.Add(x, x.category)); // populate master part list, the value is the category of the part
             }
         }
 
         public void OnGUI()
         {
-            if (_scene != HighLogic.LoadedScene && _text != null && HighLogic.LoadedSceneIsEditor) // scene changed and there's text in the box and the new scene is the editor
-                    _text.setText("");
+            if (scene != HighLogic.LoadedScene && text != null && HighLogic.LoadedSceneIsEditor) { // scene changed and there's searchText in the box and the new scene is the editor {
+                    text.SetText("");
+            }
 
-            if (!EditorLogic.editorLocked && HighLogic.LoadedSceneIsEditor)
+            if (!EditorLogic.editorLocked && HighLogic.LoadedSceneIsEditor && EditorLogic.fetch)
             {
                 GUI.skin = EditorLogic.fetch.shipBrowserSkin;// AssetBase.GetGUISkin("OrbitMapSkin");
 
-                if (EditorPartList.Instance.categorySelected != _panel) // user clicked new panel
+                if (EditorPartList.Instance.categorySelected != (int) panel) // user clicked new panel
                 {
-                    if (_text != null)
-                        _text.Fire(); // redo the search
+                    if (text != null)
+                    {
+                        if (categorize)
+                        {
+                            text.SetText("");
+                        }
+                        else
+                        {
+                            text.Fire();
+                        }
+                    }
+                    panel = (PartCategories)EditorPartList.Instance.categorySelected;
+                }
 
-                    _panel = EditorPartList.Instance.categorySelected;
-                }              
+                
 
-                _text.Draw(); // draw our textbox, see below
 
-                if (GUI.Button(new Rect(_text.getPosition().x, _text.getPosition().y - 26, 25, 25), new GUIContent(back)))// "<"))// new GUIContent(back))) // clear button
-                    _text.setText("");
+                text.Draw(); // draw our textbox, see below
 
-                bool test = _categorize;
+                if (GUI.Button(new Rect(text.GetPosition().x, text.GetPosition().y - 26, 25, 25), new GUIContent(back))) // "<"))// new GUIContent(back))) // clear button
+                {
+                    text.SetText("");
+                }
 
-                _categorize = GUI.Toggle(new Rect(_text.getPosition().x + 26, _text.getPosition().y - 26, 25, 25), _categorize, "∞", GUI.skin.button);// "✱", GUI.skin.button); // show all categories on the same page?
+                bool test = categorize;
 
-                if (_categorize != test) // if category button changes, fire the listener
-                    _text.Fire();
+                categorize = GUI.Toggle(new Rect(text.GetPosition().x + 26, text.GetPosition().y - 26, 25, 25), categorize, "∞", GUI.skin.button);// "✱", GUI.skin.button); // show all categories on the same page?
+
+                if (categorize != test) // if category button changes, fire the listener
+                {
+                    text.Fire();
+                }
                 
                 GUI.skin = HighLogic.Skin;
+
+                if (Input.GetKeyUp(KeyCode.Escape))  //Clear Textbox
+                {
+                    text.SetText("");
+                    text.Fire(); // redo the search
+                }
+                else if (Input.GetKeyUp(KeyCode.Slash))
+                {
+                    GUI.FocusControl("PartSearchTextbox");
+                }
             }
 
-            _scene = HighLogic.LoadedScene; // refresh _scene to current scene
+            scene = HighLogic.LoadedScene; // refresh _scene to current scene
         }
 
 
@@ -128,72 +150,88 @@ namespace PartSearch
           * textbox or Fire() is called on _text - our instance
           * of TextWithListener(see below)
          ********************************************************/
-        public void Search(int id, string text, int oldlength, int newlength)
+        public void Search(int id, string searchText, int oldlength, int newlength)
         {
             PartLoader.LoadedPartsList.Clear();
 
-            foreach (AvailablePart part in _master.Keys) // reset part categories to original categories
-                part.category = _master[part];
-
-            if (text.Contains("[") && text.Contains("]")) // check for search syntax [token]term
+            foreach (AvailablePart part in master.Keys) // reset part categories to original categories
             {
-                string token = text.Substring(text.IndexOf("[") + 1, text.IndexOf("]") - 1); // get the token, between the [ and ]
+                part.category = master[part];
+            }
+
+            if (searchText.Contains("[") && searchText.Contains("]")) // check for search syntax [token]term
+            {
+                string token = searchText.Substring(searchText.IndexOf("[") + 1, searchText.IndexOf("]") - 1); // get the token, between the [ and ]
                 Debug.Log(token);
-                string term = text.Remove(0, text.IndexOf("]") + 1); // get the term, everything after ]
+                string term = searchText.Remove(0, searchText.IndexOf("]") + 1); // get the term, everything after ]
                 Debug.Log(term);
 
                 switch (token.ToLower()) // search based on the token, if the token isn't one of the following, do the default
                 {
                     case "module":
-                        PartLoader.LoadedPartsList.AddRange(_master.Keys.Where(x => x.moduleInfo.ToLower().Contains(term.ToLower())));
-                        if(_categorize)    
-                            PartLoader.LoadedPartsList.ForEach(x => x.category = EditorPartList.Instance.categorySelected);
+                        PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.moduleInfo.ToLower().Contains(term.ToLower())));
+                        if(categorize)
+                            PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
                         break;
                     case "author":
-                        PartLoader.LoadedPartsList.AddRange(_master.Keys.Where(x => x.author.ToLower().Contains(term.ToLower())));
-                        if (_categorize)
-                            PartLoader.LoadedPartsList.ForEach(x => x.category = EditorPartList.Instance.categorySelected);
+                        PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.author.ToLower().Contains(term.ToLower())));
+                        if (categorize)
+                            PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
                         break;
                     case "description":
-                        PartLoader.LoadedPartsList.AddRange(_master.Keys.Where(x => x.description.ToLower().Contains(term.ToLower())));
-                        if (_categorize)
-                            PartLoader.LoadedPartsList.ForEach(x => x.category = EditorPartList.Instance.categorySelected);
+                        PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.description.ToLower().Contains(term.ToLower())));
+                        if (categorize)
+                            PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
                         break;
                     case "manufacturer":
-                        PartLoader.LoadedPartsList.AddRange(_master.Keys.Where(x => x.manufacturer.ToLower().Contains(term.ToLower())));
-                        if (_categorize)
-                            PartLoader.LoadedPartsList.ForEach(x => x.category = EditorPartList.Instance.categorySelected);
+                        PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.manufacturer.ToLower().Contains(term.ToLower())));
+                        if (categorize)
+                            PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
                         break;
                     default:
-                        PartLoader.LoadedPartsList.ForEach(x => x.category = EditorPartList.Instance.categorySelected);
-                        if (_categorize)
-                            PartLoader.LoadedPartsList.AddRange(_master.Keys.Where(x => x.title.ToLower().Contains(text.ToLower()) || x.partPrefab.GetType().FullName.Contains(text.ToLower()) || x.moduleInfo.ToLower().Contains(text.ToLower())));
+                        PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
+                        if (categorize)
+                            PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.title.ToLower().Contains(searchText.ToLower()) || x.partPrefab.GetType().FullName.Contains(searchText.ToLower()) || x.moduleInfo.ToLower().Contains(searchText.ToLower())));
                         break;
                 }
             }
-            else if (text != "") // no tokens, but text in the box
+            else if (searchText != "") // no tokens, but searchText in the box
             {
-                PartLoader.LoadedPartsList.AddRange(_master.Keys.Where(x => x.title.ToLower().Contains(text.ToLower()) || x.partPrefab.GetType().FullName.Contains(text.ToLower()) || x.moduleInfo.ToLower().Contains(text.ToLower())));
-                if (_categorize)
-                    PartLoader.LoadedPartsList.ForEach(x => x.category = EditorPartList.Instance.categorySelected);
+                string[] words = searchText.Split(" ".ToCharArray());
+
+                PartLoader.LoadedPartsList.AddRange(master.Keys); //Add all parts to filter
+
+                foreach (string word in words) //Filter pasts on each word
+                {
+                    List<AvailablePart> tmp = new List<AvailablePart>();
+                    tmp.AddRange(PartLoader.LoadedPartsList.Where(x => x.title.ToLower().Contains(word.ToLower()) || x.partPrefab.GetType().FullName.Contains(word.ToLower()) || x.moduleInfo.ToLower().Contains(word.ToLower()) || x.description.ToLower().Contains(word.ToLower())));
+                    PartLoader.LoadedPartsList.Clear();
+                    PartLoader.LoadedPartsList.AddRange(tmp);
+                }
+                if (categorize)
+                {
+                    PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories)EditorPartList.Instance.categorySelected);
+                }
             }
             else // reset the part list
-                PartLoader.LoadedPartsList.AddRange(_master.Keys);
+            {
+                PartLoader.LoadedPartsList.AddRange(master.Keys);
+            }
 
             EditorPartList.Instance.Refresh(); // refresh the editor
             PartLoader.LoadedPartsList.Clear(); // clear the part list
-            PartLoader.LoadedPartsList.AddRange(_master.Keys); // reset the part list
+            PartLoader.LoadedPartsList.AddRange(master.Keys); // reset the part list
         }
     }
 
     class TextWithListener
     {
-        public delegate void TextChanged(int id, string text, int oldlength, int newlength); // text change delegate definition
+        public delegate void TextChanged(int id, string text, int oldlength, int newlength); // searchText change delegate definition
 
-        public TextChanged TextChangedListener = null; // instance's delegate
+        public TextChanged textChangedListener = null; // instance's delegate
 
-        private string _lastText = "";
-        private string _currentText = "";
+        private string lastText = "";
+        private string currentText = "";
 
         private Rect pos;
 
@@ -201,37 +239,38 @@ namespace PartSearch
 
         public TextWithListener(int id, string startText)
         {
-            _currentText = startText;
+            currentText = startText;
             _id = id;
         }
 
         public void Draw()
         {
-            if (_currentText != _lastText) // text changed
+            if (currentText != lastText) // searchText changed
             {
-                if (TextChangedListener != null)
-                    TextChangedListener(_id, _currentText, _lastText.Length, _currentText.Length); // fire the listener
+                if (textChangedListener != null)
+                    textChangedListener(_id, currentText, lastText.Length, currentText.Length); // fire the listener
 
-                _lastText = _currentText;
+                lastText = currentText;
             }
 
             pos = new Rect(EditorPanels.Instance.partsPanelWidth + 10, Screen.height - EditorPanels.Instance.partsPanelWidth / 3 - 8, 100, 25); // calculate position and store it for getPosition()
 
-            _currentText = GUI.TextField(pos, _currentText, GUI.skin.textField);
+            GUI.SetNextControlName("PartSearchTextbox");
+            currentText = GUI.TextField(pos, currentText, GUI.skin.textField);
         }
 
         public void Fire() // manually fire the listener by calling this function
         {
-            if (TextChangedListener != null)
-                TextChangedListener(_id, _currentText, _lastText.Length, _currentText.Length);
+            if (textChangedListener != null)
+                textChangedListener(_id, currentText, lastText.Length, currentText.Length);
         }
 
-        public void setText(string text)
+        public void SetText(string text)
         {
-            _currentText = text;
+            currentText = text;
         }
 
-        public Rect getPosition()
+        public Rect GetPosition()
         {
             return pos;
         }
