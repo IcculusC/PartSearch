@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using KSP.IO;
 using UnityEngine;
 
 namespace PartSearch
@@ -45,33 +46,44 @@ namespace PartSearch
          * Calling EditorPartList.Instance.Refresh() manually updates the editorfrom the above source
          * 
          * EditorPartList.Instance.categorySelected determines which category the user currently has up
-         */       
+         */
+
+        private const String WND_POSITION = "PartSearchWndPos";
 
         private Dictionary<AvailablePart, PartCategories> master = null;
-
         private TextWithListener text;
-
-        private GameScenes scene;
-
+        private GameScenes gameScene;
         private PartCategories panel;
-
         private bool categorize = true;
-
         private static Texture2D back;
+        private Rect wndRect = new Rect(400, 40, 300, 65);
+        private ApplicationLauncherButton tbButton;
+        private Boolean showGUI = false;
+        private PluginConfiguration config;
 
         public void Start()
         {
             if (text == null) // create a searchText box with listener, see below
             {
-                text = new TextWithListener(1, "") {textChangedListener = Search};
+                text = new TextWithListener(1, "") { textChangedListener = Search };
             }
 
-            scene = HighLogic.LoadedScene;
+            gameScene = HighLogic.LoadedScene;
 
-            byte[] bit = Properties.Resources.eraser_small; // get button image from resources
+            config = KSP.IO.PluginConfiguration.CreateForType<PartSearch>();
+            config.load();
+            wndRect = config.GetValue(WND_POSITION, new Rect(400, 40, 300, 65));
 
-            back = new Texture2D(25, 25); // make new texture
-            back.LoadImage(bit); // load image into texture
+            //byte[] bit = Properties.Resources.eraser_small; // get button image from resources
+
+            //back = new Texture2D(25, 25); // make new texture
+            //back.LoadImage(bit); // load image into texture
+        }
+
+        public void Awake() {
+            RenderingManager.AddToPostDrawQueue(0, OnDraw);
+            GameEvents.onGUIApplicationLauncherReady.Add(OnGUIAppLauncherReady);
+            GameEvents.onGameSceneLoadRequested.Add(OnGameSceneLoadRequested);
         }
 
         public void Update()
@@ -83,13 +95,40 @@ namespace PartSearch
             }
         }
 
-        public void OnGUI()
+        void OnGUIAppLauncherReady() {
+            if (ApplicationLauncher.Ready) {
+                tbButton = ApplicationLauncher.Instance.
+                    AddModApplication(OnToggleOn, OnToggleOff, null, null, null, null, 
+                    ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.SPH, 
+                    GameDatabase.Instance.GetTexture("PartSearch/Textures/tbbutton", false));
+            }
+        }
+
+
+        void OnGameSceneLoadRequested(GameScenes scene) {
+            if (tbButton != null) {
+                ApplicationLauncher.Instance.RemoveModApplication(tbButton);
+                tbButton = null;
+            }
+        }
+
+        private void OnToggleOn() {
+            showGUI = true;
+        }
+
+        private void OnToggleOff() {
+            text.SetText("");
+            text.Fire();
+            showGUI = false;
+        }
+
+        public void OnDraw()
         {
-            if (scene != HighLogic.LoadedScene && text != null && HighLogic.LoadedSceneIsEditor) { // scene changed and there's searchText in the box and the new scene is the editor {
+            if (gameScene != HighLogic.LoadedScene && text != null && HighLogic.LoadedSceneIsEditor) { // scene changed and there's searchText in the box and the new scene is the editor {
                     text.SetText("");
             }
 
-            if (!EditorLogic.editorLocked && HighLogic.LoadedSceneIsEditor && EditorLogic.fetch)
+            if (showGUI && !EditorLogic.editorLocked && HighLogic.LoadedSceneIsEditor && EditorLogic.fetch)
             {
                 GUI.skin = EditorLogic.fetch.shipBrowserSkin;// AssetBase.GetGUISkin("OrbitMapSkin");
 
@@ -109,39 +148,52 @@ namespace PartSearch
                     panel = (PartCategories)EditorPartList.Instance.categorySelected;
                 }
 
-                
+                wndRect = GUILayout.Window("Hello".GetHashCode(), wndRect, id => {
+                    GUILayout.BeginHorizontal();
+                    text.Draw(); // draw our textbox, see below
+
+                    if (GUILayout.Button(new GUIContent("C", "Clear search"))) {
+                        text.SetText("");
+                    }
+
+                    bool test = categorize;
+
+                    categorize = GUILayout.Toggle(categorize,new GUIContent("∞", "Search all categories"), GUI.skin.button);
+                    GUILayout.EndHorizontal();
+
+                    if (categorize != test) {// if category button changes, fire the listener
+                        text.Fire();
+                    }
+
+                    GUI.DragWindow();
+                }, "Search");
 
 
-                text.Draw(); // draw our textbox, see below
-
-                if (GUI.Button(new Rect(text.GetPosition().x, text.GetPosition().y - 26, 25, 25), new GUIContent(back))) // "<"))// new GUIContent(back))) // clear button
-                {
-                    text.SetText("");
-                }
-
-                bool test = categorize;
-
-                categorize = GUI.Toggle(new Rect(text.GetPosition().x + 26, text.GetPosition().y - 26, 25, 25), categorize, "∞", GUI.skin.button);// "✱", GUI.skin.button); // show all categories on the same page?
-
-                if (categorize != test) // if category button changes, fire the listener
-                {
-                    text.Fire();
-                }
-                
                 GUI.skin = HighLogic.Skin;
 
                 if (Input.GetKeyUp(KeyCode.Escape))  //Clear Textbox
                 {
                     text.SetText("");
                     text.Fire(); // redo the search
-                }
-                else if (Input.GetKeyUp(KeyCode.Slash))
-                {
+                } else if (Input.GetKeyUp(KeyCode.Slash)) {
                     GUI.FocusControl("PartSearchTextbox");
                 }
             }
 
-            scene = HighLogic.LoadedScene; // refresh _scene to current scene
+            gameScene = HighLogic.LoadedScene; // refresh _scene to current scene
+        }
+
+        public void OnDestroy() {
+            config.SetValue(WND_POSITION, wndRect);
+            config.save();
+
+            if (tbButton != null) {
+                ApplicationLauncher.Instance.RemoveModApplication(tbButton);
+                tbButton = null;
+            }
+
+            GameEvents.onGUIApplicationLauncherReady.Remove(OnGUIAppLauncherReady);
+            GameEvents.onGameSceneLoadRequested.Remove(OnGameSceneLoadRequested);
         }
 
 
@@ -224,7 +276,7 @@ namespace PartSearch
         }
     }
 
-    class TextWithListener
+    public class TextWithListener
     {
         public delegate void TextChanged(int id, string text, int oldlength, int newlength); // searchText change delegate definition
 
@@ -256,7 +308,7 @@ namespace PartSearch
             pos = new Rect(EditorPanels.Instance.partsPanelWidth + 10, Screen.height - EditorPanels.Instance.partsPanelWidth / 3 - 8, 100, 25); // calculate position and store it for getPosition()
 
             GUI.SetNextControlName("PartSearchTextbox");
-            currentText = GUI.TextField(pos, currentText, GUI.skin.textField);
+            currentText = GUILayout.TextField(currentText, GUI.skin.textField, GUILayout.MinWidth(200));
         }
 
         public void Fire() // manually fire the listener by calling this function

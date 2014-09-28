@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<config>
+    <rect name="PartSearchWndPos">
+        <xmin>301</xmin>
+        <xmax>601</xmax>
+        <ymin>790</ymin>
+        <ymax>856</ymax>
+    </rect>
+</config>
