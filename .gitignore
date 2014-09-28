@@ -1,0 +1,6 @@
+*.sln
+*.suo
+bin/
+obj/
+node_modules/
+release/
