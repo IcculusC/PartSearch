@@ -11,4 +11,5 @@ module.exports = (grunt) ->
                 files: [
                         { cwd: 'bin/Debug/', src: ['PartSearch.dll'], dest: 'PartSearch', expand: true }
                         { cwd: 'PartSearch/', src: ['**'], dest: 'PartSearch', expand: true }
+                        { src: ['README.md', 'LICENSE.md'], dest: 'PartSearch'}
                     ]

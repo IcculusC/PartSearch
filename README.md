@@ -1,26 +1,23 @@
-PartSearch
-==========
+# Part Search
 
-KSP editor part filter
+Part Search is an addon for Kerbal Space Program. Part Search adds a quick search window to the Vehicle Assembly Building (VAB) and the Space Plane Hangar (SPH). When entering text in the search window, the addon searches for (partial) matches in the names and descriptions of vehicle parts. The parts window is filtered dynamically to only contain the matching parts.
 
-"The MIT License (MIT)
+## Installation
 
-Copyright (c) 2013/2014 IcculusC/rslashphish
+Copy all the files to the GameData directory in your KSP installation.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## Usage
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+After successful installation the the toolbars in the VAB and SPH display a new button named 'Find'. This button will toggle the search window on and off.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE."
+The search window can be moved around freely. The addon remembers the last position of the window. The window contains a text field and two buttons. Clicking in the text field allows entering text. While typing the part window displays only the parts matching the search term. For example typing 'tank' will show all parts whose name or description contain the string tank (this includes partial matches).
+
+The button marked 'C' clears the contents of the textfield.
+
+When the '∞' button is clicked searches include all parts in all categories. Otherwise only the current category is searched.
+
+## Notes
+
+* If a search is started, while the part window is not on the first page, the search results might not be visible. Use the 'Previous Page' button to switch to the first page.
+* If the search window is not visible when clicking the find button, try deleting the file PartSearch\PluginData\PartSearch\config.xml. This resets the window position. The game must be restarted to see the effect.
+* Part Search might interfere with other addons, that manipulate the part window.
