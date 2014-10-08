@@ -1,5 +1,6 @@
 {
 	"NAME":"Part Search",
+    "URL":"https://raw.githubusercontent.com/Banbury/PartSearch/master/PartSearch/PartSearch.version",
     "GITHUB":
     {
         "USERNAME":"Banbury",
@@ -18,7 +19,7 @@
 		"MAJOR":0,
 		"MINOR":24,
 		"PATCH":2
-	}
+	},
 	"KSP_VERSION_MIN":
 	{
 		"MAJOR":0,
