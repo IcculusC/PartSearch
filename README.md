@@ -8,7 +8,7 @@ Copy all the files to the GameData directory in your KSP installation.
 
 ## Usage
 
-After successful installation the the toolbars in the VAB and SPH display a new button named 'Find'. This button will toggle the search window on and off.
+After successful installation the toolbars in the VAB and SPH display a new button named 'Find'. This button will toggle the search window on and off.
 
 The search window can be moved around freely. The addon remembers the last position of the window. The window contains a text field and two buttons. Clicking in the text field allows entering text. While typing the part window displays only the parts matching the search term. For example typing 'tank' will show all parts whose name or description contain the string tank (this includes partial matches).
 
