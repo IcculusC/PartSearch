@@ -55,25 +55,37 @@ namespace PartSearch
         private GameScenes gameScene;
         private PartCategories panel;
         private bool categorize = true;
-        private static Texture2D back;
+        //private static Texture2D back;
         private Rect wndRect = new Rect(400, 40, 300, 65);
         private ApplicationLauncherButton tbButton;
         private Boolean showGUI = false;
+        private bool setFocus = true;
         private PluginConfiguration config;
+        private EditorPartListFilter filter;
 
         public void Start()
         {
             if (text == null) // create a searchText box with listener, see below
             {
-                text = new TextWithListener(1, "") { textChangedListener = Search };
+                text = new TextWithListener(1, "") { 
+                    textChangedListener = (id, s, oldlength, newlength) => 
+                    {
+                        EditorPartList.Instance.SelectTab(EditorPartList.Instance.categorySelected); // Selects the first page of the current category
+                        EditorPartList.Instance.Refresh();
+                    }
+                };
             }
 
             gameScene = HighLogic.LoadedScene;
 
-            config = KSP.IO.PluginConfiguration.CreateForType<PartSearch>();
+            config = PluginConfiguration.CreateForType<PartSearch>();
             config.load();
             wndRect = config.GetValue(WND_POSITION, new Rect(400, 40, 300, 65));
 
+            filter = new EditorPartListFilter("PartSearchFilter", p => Search(p, text.GetText()));
+
+            GameEvents.onGUIApplicationLauncherReady.Add(OnGUIAppLauncherReady);
+            GameEvents.onGameSceneLoadRequested.Add(OnGameSceneLoadRequested);
             //byte[] bit = Properties.Resources.eraser_small; // get button image from resources
 
             //back = new Texture2D(25, 25); // make new texture
@@ -82,8 +94,6 @@ namespace PartSearch
 
         public void Awake() {
             RenderingManager.AddToPostDrawQueue(0, OnDraw);
-            GameEvents.onGUIApplicationLauncherReady.Add(OnGUIAppLauncherReady);
-            GameEvents.onGameSceneLoadRequested.Add(OnGameSceneLoadRequested);
         }
 
         public void Update()
@@ -96,7 +106,7 @@ namespace PartSearch
         }
 
         void OnGUIAppLauncherReady() {
-            if (ApplicationLauncher.Ready) {
+            if (ApplicationLauncher.Ready && tbButton == null) {
                 tbButton = ApplicationLauncher.Instance.
                     AddModApplication(OnToggleOn, OnToggleOff, null, null, null, null, 
                     ApplicationLauncher.AppScenes.VAB | ApplicationLauncher.AppScenes.SPH, 
@@ -107,19 +117,23 @@ namespace PartSearch
 
         void OnGameSceneLoadRequested(GameScenes scene) {
             if (tbButton != null) {
-                ApplicationLauncher.Instance.RemoveModApplication(tbButton);
-                tbButton = null;
+                Destroy();
             }
         }
 
         private void OnToggleOn() {
+            DisableCategories(categorize);
+            EditorPartList.Instance.ExcludeFilters.AddFilter(filter);
             showGUI = true;
+            setFocus = true;
         }
 
         private void OnToggleOff() {
+            DisableCategories(false);
             text.SetText("");
             text.Fire();
             showGUI = false;
+            EditorPartList.Instance.ExcludeFilters.RemoveFilter(filter);
         }
 
         public void OnDraw()
@@ -134,16 +148,8 @@ namespace PartSearch
 
                 if (EditorPartList.Instance.categorySelected != (int) panel) // user clicked new panel
                 {
-                    if (text != null)
-                    {
-                        if (categorize)
-                        {
-                            text.SetText("");
-                        }
-                        else
-                        {
-                            text.Fire();
-                        }
+                    if (text != null) {
+                        text.Fire();
                     }
                     panel = (PartCategories)EditorPartList.Instance.categorySelected;
                 }
@@ -151,6 +157,10 @@ namespace PartSearch
                 wndRect = GUILayout.Window("Hello".GetHashCode(), wndRect, id => {
                     GUILayout.BeginHorizontal();
                     text.Draw(); // draw our textbox, see below
+                    if (setFocus) {
+                        GUI.FocusControl("PartSearchTextbox");
+                        setFocus = false;
+                    }
 
                     if (GUILayout.Button(new GUIContent("C", "Clear search"))) {
                         text.SetText("");
@@ -162,6 +172,7 @@ namespace PartSearch
                     GUILayout.EndHorizontal();
 
                     if (categorize != test) {// if category button changes, fire the listener
+                        DisableCategories(categorize);
                         text.Fire();
                     }
 
@@ -170,20 +181,17 @@ namespace PartSearch
 
 
                 GUI.skin = HighLogic.Skin;
-
-                if (Input.GetKeyUp(KeyCode.Escape))  //Clear Textbox
-                {
-                    text.SetText("");
-                    text.Fire(); // redo the search
-                } else if (Input.GetKeyUp(KeyCode.Slash)) {
-                    GUI.FocusControl("PartSearchTextbox");
-                }
             }
 
             gameScene = HighLogic.LoadedScene; // refresh _scene to current scene
         }
 
         public void OnDestroy() {
+            Destroy();
+        }
+
+        private void Destroy() {
+            DisableCategories(false);
             config.SetValue(WND_POSITION, wndRect);
             config.save();
 
@@ -196,88 +204,37 @@ namespace PartSearch
             GameEvents.onGameSceneLoadRequested.Remove(OnGameSceneLoadRequested);
         }
 
+        private void DisableCategories(bool disable) {
+            if (disable) {
+                EditorPartList.Instance.HideTabs();
+                PartLoader.LoadedPartsList.ForEach(
+                    x => x.category = (PartCategories)EditorPartList.Instance.categorySelected);
+            } else {
+                EditorPartList.Instance.ShowTabs();
+                PartLoader.LoadedPartsList.ForEach(
+                    x => x.category = master[x]);
+            }
+            EditorPartList.Instance.SelectTab(EditorPartList.Instance.categorySelected); // Selects the first page of the current category
+            EditorPartList.Instance.Refresh();
+        }
 
-         /********************************************************
-          * This function is called when the user types in the
-          * textbox or Fire() is called on _text - our instance
-          * of TextWithListener(see below)
-         ********************************************************/
-        public void Search(int id, string searchText, int oldlength, int newlength)
-        {
-            PartLoader.LoadedPartsList.Clear();
+        private bool Search(AvailablePart part, string searchText) {
+            string[] words = searchText.Split(" ".ToCharArray());
 
-            foreach (AvailablePart part in master.Keys) // reset part categories to original categories
-            {
-                part.category = master[part];
+            bool ret = false;
+            foreach (string word in words) {
+                ret |= part.title.ToLower().Contains(word.ToLower()) || 
+                    part.partPrefab.GetType().FullName.Contains(word.ToLower()) || 
+                    part.moduleInfo.ToLower().Contains(word.ToLower()) || 
+                    part.description.ToLower().Contains(word.ToLower());
             }
 
-            if (searchText.Contains("[") && searchText.Contains("]")) // check for search syntax [token]term
-            {
-                string token = searchText.Substring(searchText.IndexOf("[") + 1, searchText.IndexOf("]") - 1); // get the token, between the [ and ]
-                Debug.Log(token);
-                string term = searchText.Remove(0, searchText.IndexOf("]") + 1); // get the term, everything after ]
-                Debug.Log(term);
-
-                switch (token.ToLower()) // search based on the token, if the token isn't one of the following, do the default
-                {
-                    case "module":
-                        PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.moduleInfo.ToLower().Contains(term.ToLower())));
-                        if(categorize)
-                            PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
-                        break;
-                    case "author":
-                        PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.author.ToLower().Contains(term.ToLower())));
-                        if (categorize)
-                            PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
-                        break;
-                    case "description":
-                        PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.description.ToLower().Contains(term.ToLower())));
-                        if (categorize)
-                            PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
-                        break;
-                    case "manufacturer":
-                        PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.manufacturer.ToLower().Contains(term.ToLower())));
-                        if (categorize)
-                            PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
-                        break;
-                    default:
-                        PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories) EditorPartList.Instance.categorySelected);
-                        if (categorize)
-                            PartLoader.LoadedPartsList.AddRange(master.Keys.Where(x => x.title.ToLower().Contains(searchText.ToLower()) || x.partPrefab.GetType().FullName.Contains(searchText.ToLower()) || x.moduleInfo.ToLower().Contains(searchText.ToLower())));
-                        break;
-                }
-            }
-            else if (searchText != "") // no tokens, but searchText in the box
-            {
-                string[] words = searchText.Split(" ".ToCharArray());
-
-                PartLoader.LoadedPartsList.AddRange(master.Keys); //Add all parts to filter
-
-                foreach (string word in words) //Filter pasts on each word
-                {
-                    List<AvailablePart> tmp = new List<AvailablePart>();
-                    tmp.AddRange(PartLoader.LoadedPartsList.Where(x => x.title.ToLower().Contains(word.ToLower()) || x.partPrefab.GetType().FullName.Contains(word.ToLower()) || x.moduleInfo.ToLower().Contains(word.ToLower()) || x.description.ToLower().Contains(word.ToLower())));
-                    PartLoader.LoadedPartsList.Clear();
-                    PartLoader.LoadedPartsList.AddRange(tmp);
-                }
-                if (categorize)
-                {
-                    PartLoader.LoadedPartsList.ForEach(x => x.category = (PartCategories)EditorPartList.Instance.categorySelected);
-                }
-            }
-            else // reset the part list
-            {
-                PartLoader.LoadedPartsList.AddRange(master.Keys);
-            }
-
-            EditorPartList.Instance.Refresh(); // refresh the editor
-            PartLoader.LoadedPartsList.Clear(); // clear the part list
-            PartLoader.LoadedPartsList.AddRange(master.Keys); // reset the part list
+            return ret;
         }
     }
 
-    public class TextWithListener
-    {
+
+    public class TextWithListener {
         public delegate void TextChanged(int id, string text, int oldlength, int newlength); // searchText change delegate definition
 
         public TextChanged textChangedListener = null; // instance's delegate
@@ -320,6 +277,10 @@ namespace PartSearch
         public void SetText(string text)
         {
             currentText = text;
+        }
+
+        public String GetText() {
+            return currentText;
         }
 
         public Rect GetPosition()

@@ -70,8 +70,8 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>mkdir d:\games\KSP_win64\GameData\PartSearch
-xcopy /Y "$(TargetPath)" "d:\games\KSP_win64\GameData\PartSearch"</PostBuildEvent>
+    <PostBuildEvent>mkdir d:\games\ksp-2.5.0\GameData\PartSearch
+xcopy /Y "$(TargetPath)" "d:\games\ksp-2.5.0\GameData\PartSearch"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
