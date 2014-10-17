@@ -57,6 +57,8 @@ namespace PartSearch
         private bool categorize = true;
         //private static Texture2D back;
         private Rect wndRect = new Rect(400, 40, 300, 65);
+		private string key = "space";
+		private string keyMod = "left ctrl";
         private ApplicationLauncherButton tbButton;
         private Boolean showGUI = false;
         private bool setFocus = true;
@@ -81,6 +83,8 @@ namespace PartSearch
             config = PluginConfiguration.CreateForType<PartSearch>();
             config.load();
             wndRect = config.GetValue(WND_POSITION, new Rect(400, 40, 300, 65));
+			key = config.GetValue("PartSearchKey", "space");
+			keyMod = config.GetValue("PartSearchKeyMod", "left ctrl");
 
             filter = new EditorPartListFilter("PartSearchFilter", p => Search(p, text.GetText()));
 
@@ -138,6 +142,11 @@ namespace PartSearch
 
         public void OnDraw()
         {
+			if (Input.GetKey(keyMod) && Input.GetKeyDown(key)) {
+				if(showGUI) setFocus=true;
+				else tbButton.SetTrue();
+			}
+
             if (gameScene != HighLogic.LoadedScene && text != null && HighLogic.LoadedSceneIsEditor) { // scene changed and there's searchText in the box and the new scene is the editor {
                     text.SetText("");
             }
@@ -193,6 +202,8 @@ namespace PartSearch
         private void Destroy() {
             DisableCategories(false);
             config.SetValue(WND_POSITION, wndRect);
+			config.SetValue("PartSearchKey", key);
+			config.SetValue("PartSearchKeyMod", keyMod);
             config.save();
 
             if (tbButton != null) {
